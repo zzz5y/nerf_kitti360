@@ -1,4 +1,5 @@
 import os,imageio
+import imageio.v2 as imageio
 import torch
 import numpy as np
 import cv2 as cv
@@ -40,12 +41,12 @@ def _load_data(datadir,end_iterion=424,sequence ='2013_05_28_drive_0000_sync'):
         for line in lines:
             lineData = line.strip().split()
             if lineData[0] == 'P_rect_00:':
-                K_00 = np.array(lineData[1:]).reshape(3,4).astype(np.float)
+                K_00 = np.array(lineData[1:]).reshape(3,4).astype(np.float64)
             elif lineData[0] == 'P_rect_01:':
-                K_01 = np.array(lineData[1:]).reshape(3,4).astype(np.float)
+                K_01 = np.array(lineData[1:]).reshape(3,4).astype(np.float64)
             elif lineData[0] == 'R_rect_01:':
                 R_rect_01 = np.eye(4)
-                R_rect_01[:3,:3] = np.array(lineData[1:]).reshape(3,3).astype(np.float)
+                R_rect_01[:3,:3] = np.array(lineData[1:]).reshape(3,3).astype(np.float64)
 
     '''Load extrinstic matrix'''
     CamPose_00 = {}
@@ -77,10 +78,11 @@ def _load_data(datadir,end_iterion=424,sequence ='2013_05_28_drive_0000_sync'):
     ''' Load corrlected images camera 00--> index    camera 01----> index+1'''
     def imread(f):
         if f.endswith('png'):
-            return imageio.imread(f, ignoregamma=True)
+            #return imageio.imread(f, ignoregamma=True)
+            return imageio.imread(f, format="PNG-PIL", ignoregamma=True)
         else:
-            return imageio.imread(f)
-
+            #return imageio.imread(f)
+            return imageio.imread(f, format="PNG-PIL", ignoregamma=True)
     imgae_dir = os.path.join(datadir,sequence)
     image_00 = os.path.join(imgae_dir,'image_00/data_rect')
     image_01 = os.path.join(imgae_dir,'image_01/data_rect')
@@ -144,7 +146,7 @@ def loadCameraToPose(filename):
         for line in lines:
             lineData = list(line.strip().split())
             if lineData[0] == 'image_01:':
-                data = np.array(lineData[1:]).reshape(3,4).astype(np.float)
+                data = np.array(lineData[1:]).reshape(3,4).astype(np.float64)
                 data = np.concatenate((data,lastrow), axis=0)
                 Tr[lineData[0]] = data
 
