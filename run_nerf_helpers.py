@@ -169,6 +169,32 @@ def get_rays(H, W, K, c2w):
     # rays_o = c2w[:3,-1].expand(rays_d.shape)
     return rays_o, rays_d
 
+# Ray helpers
+#opencv2opengl
+def get_rays_opencv2opengl(H, W, K, c2w):
+    X, Y = np.meshgrid(np.arange(W), np.arange(H))
+    # i = i.t()
+    # j = j.t()
+    XYZ = np.concatenate((X[:, :, None], Y[:, :, None], np.ones_like(X[:, :, None])), axis=-1)
+    XYZ = XYZ @ np.linalg.inv(K[:3, :3]).T
+    XYZ = torch.from_numpy(XYZ.astype(np.float32)).to('cuda')
+    XYZ = XYZ @ c2w[:3, :3].T
+    rays_d = XYZ.reshape(H,W,3)
+
+    #坐标系兼容
+    #rays_d[..., 2] *= -1  # Flip the z component
+
+
+    # rays_o = np.broadcast_to(c2w[:3,-1], np.shape(rays_d))
+    rays_o = c2w[:3, -1].expand(rays_d.shape)
+
+    # dirs = torch.stack([(i-K[0][2])/K[0][0], -(j-K[1][2])/K[1][1], -torch.ones_like(i)], -1)
+    # # Rotate ray directions from camera frame to the world frame
+    # rays_d = torch.sum(dirs[..., np.newaxis, :] * c2w[:3,:3], -1)  # dot product, equals to: [c2w.dot(dir) for dir in dirs]
+    # # Translate camera frame's origin to the world frame. It is the origin of all rays.
+    # rays_o = c2w[:3,-1].expand(rays_d.shape)
+    return rays_o, rays_d
+
 
 ## 该函数用于生成光线
 def get_rays_np(H, W, K, c2w):
