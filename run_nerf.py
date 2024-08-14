@@ -593,7 +593,7 @@ def config_parser():
                         help='frequency of tensorboard image logging')
     parser.add_argument("--i_weights", type=int, default=10000, 
                         help='frequency of weight ckpt saving')
-    parser.add_argument("--i_testset", type=int, default=10000,
+    parser.add_argument("--i_testset", type=int, default=5000,
                         help='frequency of testset saving')
     parser.add_argument("--i_video",   type=int, default=50000, 
                         help='frequency of render_poses video saving')
@@ -802,7 +802,7 @@ def train():
         rays_rgb = torch.Tensor(rays_rgb).to(device)
 
 
-    N_iters = 200000 + 1
+    N_iters = 100000 + 1
     print('Begin')
     print('TRAIN views are', i_train)
     print('TEST views are', i_test)
