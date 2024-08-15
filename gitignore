@@ -1,5 +1,7 @@
 .idea/
 
+*.mp4
+
 ./logs_NEW_NORM
 
 *.tar.gz

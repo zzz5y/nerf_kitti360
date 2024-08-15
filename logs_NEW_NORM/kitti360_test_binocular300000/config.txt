@@ -1,0 +1,19 @@
+expname = kitti360_test_binocular
+basedir = ./logs_NEW_NORM
+datadir = /media/ry/483BED215A2D2EBA/KITTI-360
+dataset_type = KITTI360
+
+no_batching = False
+use_viewdirs = True
+white_bkgd = False
+lrate_decay = 500
+render_test = True
+
+N_samples = 64
+N_importance = 128
+N_rand = 1024
+
+precrop_iters = 500
+precrop_frac = 0.5
+
+half_res = False

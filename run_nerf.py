@@ -21,6 +21,9 @@ from load_blender import load_blender_data
 from load_LINEMOD import load_LINEMOD_data
 from load_kitti360 import load_kitti360_data
 
+import mcubes
+import trimesh
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 np.random.seed(0)
@@ -180,7 +183,13 @@ def render_path(render_poses, hwf, K, chunk, render_kwargs, gt_imgs=None, savedi
         rgb, disp, acc, _ = render(H, W, K, chunk=chunk, c2w=c2w[:3,:4], **render_kwargs)
         rgbs.append(rgb.cpu().numpy())
         disps.append(disp.cpu().numpy())
-        gt.append(gt_imgs[i].cpu().numpy())
+
+        if(isinstance(gt_imgs,torch.Tensor)):
+            gt.append(gt_imgs[i].cpu().numpy())
+        else:
+            gt.append(gt_imgs)
+
+
         if i==0:
             print(rgb.shape, disp.shape)
 
@@ -193,15 +202,35 @@ def render_path(render_poses, hwf, K, chunk, render_kwargs, gt_imgs=None, savedi
         if savedir is not None:
             rgb8 = to8b(rgbs[-1])    ## rgb[-1] 表示最新生成的图像
             gt[i] = to8b(gt[-1])  ## rgb[-1] 表示最新生成的图像
-            pred_depth = cv.applyColorMap(cv.convertScaleAbs(((disps[-1] / disps[-1].max()) * 255).astype(np.uint8), alpha=2),cv.COLORMAP_JET)
-            # dis8 = to8b(disps[-1] / np.max(disps))
-            filename = os.path.join(savedir, '{:03d}.png'.format(i))
-            filename_gt = os.path.join(savedir, '{:03d}_gt.png'.format(i))
-            filename_dis = os.path.join(savedir,'{:03d}_dis.png'.format(i))
+            #print(gt[i].shape)#(2, 376, 1408, 3)
 
-            imageio.imwrite(filename, rgb8)
-            imageio.imwrite(filename_gt, gt[i])
-            imageio.imwrite(filename_dis,pred_depth)
+            if len(gt[i].shape)==4:
+                for frame_idx in range(gt[i].shape[0]):
+                    pred_depth = cv.applyColorMap(
+                        cv.convertScaleAbs(((disps[-1] / disps[-1].max()) * 255).astype(np.uint8), alpha=2),
+                        cv.COLORMAP_JET)
+                    # dis8 = to8b(disps[-1] / np.max(disps))
+                    # filename = os.path.join(savedir, '{:03d}.png'.format(i))
+                    # filename_gt = os.path.join(savedir, '{:03d}_gt.png'.format(i))
+                    # filename_dis = os.path.join(savedir, '{:03d}_dis.png'.format(i))
+                    # 生成文件名时包含 frame_idx
+                    filename = os.path.join(savedir, '{:03d}_{:03d}.png'.format(i, frame_idx))
+                    filename_gt = os.path.join(savedir, '{:03d}_{:03d}_gt.png'.format(i, frame_idx))
+                    filename_dis = os.path.join(savedir, '{:03d}_{:03d}_dis.png'.format(i, frame_idx))
+
+                    imageio.imwrite(filename, rgb8)
+                    imageio.imwrite(filename_gt, gt[i][frame_idx])
+                    imageio.imwrite(filename_dis, pred_depth)
+            else:
+                pred_depth = cv.applyColorMap(cv.convertScaleAbs(((disps[-1] / disps[-1].max()) * 255).astype(np.uint8), alpha=2),cv.COLORMAP_JET)
+                # dis8 = to8b(disps[-1] / np.max(disps))
+                filename = os.path.join(savedir, '{:03d}.png'.format(i))
+                filename_gt = os.path.join(savedir, '{:03d}_gt.png'.format(i))
+                filename_dis = os.path.join(savedir,'{:03d}_dis.png'.format(i))
+
+                imageio.imwrite(filename, rgb8)
+                imageio.imwrite(filename_gt, gt[i])
+                imageio.imwrite(filename_dis,pred_depth)
 
 
 
@@ -741,34 +770,37 @@ def train():
 
             print('Done rendering', testsavedir)
 
-            ## For sythetic lego Extract Mesh
-            # NeRF = render_kwargs_test['network_fine']
-            # N, chunk = 256, 1024*64
-            #
-            # t = np.linspace(-1.2, 1.2, N + 1)
-            # query_points = np.stack(np.meshgrid(t, t, t), -1).astype(np.float32)
-            # print(query_points.shape)
-            # flat = torch.from_numpy(query_points.reshape([-1, 3])).to(device)
-            #
-            # query_fn = render_kwargs_test['network_query_fn']
-            #
-            # sigma = []
-            # for i in range(0, flat.shape[0], chunk):
-            #     pts = flat[i:i+chunk,None,:]
-            #     viwedirs = torch.zeros_like(flat[i:i+chunk])
-            #     raw = query_fn(pts, viwedirs, NeRF)
-            #     sigma.append(raw[...,-1])
-            # density = torch.concat(sigma,dim=0).detach().cpu().numpy().squeeze()
+            # For sythetic lego Extract Mesh
+            NeRF = render_kwargs_test['network_fine']
+            N, chunk = 256, 1024*64
 
-            # import mcubes
+            t = np.linspace(-1.2, 1.2, N + 1)
+            query_points = np.stack(np.meshgrid(t, t, t), -1).astype(np.float32)
+            print(query_points.shape)
+            flat = torch.from_numpy(query_points.reshape([-1, 3])).to(device)
+
+            query_fn = render_kwargs_test['network_query_fn']
+
+            sigma = []
+            for i in range(0, flat.shape[0], chunk):
+                pts = flat[i:i+chunk,None,:]
+                viwedirs = torch.zeros_like(flat[i:i+chunk])
+                raw = query_fn(pts, viwedirs, NeRF)
+                sigma.append(raw[...,-1])
+            density = torch.concat(sigma,dim=0).detach().cpu().numpy().squeeze()
+
+            # import PyMCubes as mcubes
             # import trimesh
-            # threshold = 50.
+            threshold = 50.
             
-            # 大于这个 threshold 的 density 都会被提取， 而不是只在50附近提取
-            # vertices, triangles = mcubes.marching_cubes(density.reshape(257,257,-1), threshold)
-            # print('done', vertices.shape, triangles.shape)
-            # mesh = trimesh.Trimesh(vertices, triangles)
-            # mesh.export('export_mesh.ply')
+            #大于这个 threshold 的 density 都会被提取， 而不是只在50附近提取
+            vertices, triangles = mcubes.marching_cubes(density.reshape(257,257,-1), threshold)
+            print('done', vertices.shape, triangles.shape)
+
+            mesh = trimesh.Trimesh(vertices, triangles)
+            mesh_name = os.path.join(testsavedir, 'export_mesh.ply')
+            mesh.export(mesh_name)
+            imageio.mimwrite(os.path.join(testsavedir, 'video.mp4'), to8b(rgbs), fps=30, quality=8)
 
             return
 
@@ -802,7 +834,7 @@ def train():
         rays_rgb = torch.Tensor(rays_rgb).to(device)
 
 
-    N_iters = 100000 + 1
+    N_iters = 10000 + 1
     print('Begin')
     print('TRAIN views are', i_train)
     print('TEST views are', i_test)
